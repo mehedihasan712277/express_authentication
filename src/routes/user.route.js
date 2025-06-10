@@ -13,6 +13,10 @@ import { identifier } from "../middlewares/indentification.js";
 
 const router = Router();
 
+router.get("/", (req, res) => {
+    res.send("Server is running ok")
+})
+
 router.post("/signup", signup);
 router.post("/signin", signin);
 router.post("/signout", identifier, signout);
