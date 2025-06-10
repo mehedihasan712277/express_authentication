@@ -2,6 +2,7 @@ import { doHash, doHashValidation, hmacProcess } from "../utils/hashing.js";
 import { User } from "../db/models/user.model.js";
 import {
     acceptCodeSchema,
+    acceptFPCodeSchema,
     changePasswordSchema,
     signinSchema,
     signupSchema,
@@ -264,6 +265,106 @@ const changePassword = async (req, res) => {
     }
 };
 
+const sendForgotPasswordCode = async (req, res) => {
+	const { email } = req.body;
+	try {
+		const existingUser = await User.findOne({ email });
+		if (!existingUser) {
+			return res
+				.status(404)
+				.json({ success: false, message: 'User does not exists!' });
+		}
+
+		const codeValue = Math.floor(Math.random() * 1000000).toString();
+		let info = await transport.sendMail({
+			from: process.env.NODE_CODE_SENDING_EMAIL_ADDRESS,
+			to: existingUser.email,
+			subject: 'Forgot password code',
+			html: '<h1>' + codeValue + '</h1>',
+		});
+
+		if (info.accepted[0] === existingUser.email) {
+			const hashedCodeValue = hmacProcess(
+				codeValue,
+				process.env.HMAC_VERIFICATION_CODE_SECRET
+			);
+			existingUser.forgotPasswordCode = hashedCodeValue;
+			existingUser.forgotPasswordCodeValidation = Date.now();
+			await existingUser.save();
+			return res.status(200).json({ success: true, message: 'Code sent!' });
+		}
+		res.status(400).json({ success: false, message: 'Code sent failed!' });
+	} catch (error) {
+		console.log(error);
+	}
+};
+
+const verifyForgotPasswordCode = async (req, res) => {
+	const { email, providedCode, newPassword } = req.body;
+	try {
+		const { error, value } = acceptFPCodeSchema.validate({
+			email,
+			providedCode,
+			newPassword,
+		});
+		if (error) {
+			return res
+				.status(401)
+				.json({ success: false, message: error.details[0].message });
+		}
+
+		const codeValue = providedCode.toString();
+		const existingUser = await User.findOne({ email }).select(
+			'+forgotPasswordCode +forgotPasswordCodeValidation'
+		);
+
+		if (!existingUser) {
+			return res
+				.status(401)
+				.json({ success: false, message: 'User does not exists!' });
+		}
+
+		if (
+			!existingUser.forgotPasswordCode ||
+			!existingUser.forgotPasswordCodeValidation
+		) {
+			return res
+				.status(400)
+				.json({ success: false, message: 'something is wrong with the code!' });
+		}
+
+		if (
+			Date.now() - existingUser.forgotPasswordCodeValidation >
+			5 * 60 * 1000
+		) {
+			return res
+				.status(400)
+				.json({ success: false, message: 'code has been expired!' });
+		}
+
+		const hashedCodeValue = hmacProcess(
+			codeValue,
+			process.env.HMAC_VERIFICATION_CODE_SECRET
+		);
+
+		if (hashedCodeValue === existingUser.forgotPasswordCode) {
+			const hashedPassword = await doHash(newPassword, 12);
+			existingUser.password = hashedPassword;
+			existingUser.forgotPasswordCode = undefined;
+			existingUser.forgotPasswordCodeValidation = undefined;
+			await existingUser.save();
+			return res
+				.status(200)
+				.json({ success: true, message: 'Password updated!!' });
+		}
+		return res
+			.status(400)
+			.json({ success: false, message: 'unexpected occured!!' });
+	} catch (error) {
+		console.log(error);
+	}
+};
+
 export {
     signup,
     signin,
@@ -271,4 +372,6 @@ export {
     sendVerificationCode,
     verifyVerificationCode,
     changePassword,
+    sendForgotPasswordCode,
+    verifyForgotPasswordCode
 };
