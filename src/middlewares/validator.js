@@ -48,4 +48,22 @@ const acceptCodeSchema = Joi.object({
     providedCode: Joi.number().required(),
 });
 
-export { signupSchema, signinSchema, acceptCodeSchema };
+// chaneg password validation =================
+const changePasswordSchema = Joi.object({
+    newPassword: Joi.string()
+        .required()
+        .pattern(
+            new RegExp(
+                "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
+            )
+        ),
+    oldPassword: Joi.string()
+        .required()
+        .pattern(
+            new RegExp(
+                "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$"
+            )
+        ),
+});
+
+export { signupSchema, signinSchema, acceptCodeSchema, changePasswordSchema };
