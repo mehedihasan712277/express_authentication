@@ -19,6 +19,7 @@ const identifier = (req, res, next) => {
         const jwtVerified = jwt.verify(userToken, process.env.TOKEN_SECRET);
         if (jwtVerified) {
             req.user = jwtVerified;
+            console.log(req.user);
             next();
         } else {
             throw new Error("error in the token");
